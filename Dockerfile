@@ -1,5 +1,10 @@
 FROM ros:noetic-ros-base 
 
+# Build arguments for GPU support configuration
+ARG GPU_SUPPORT="integrated"
+ARG ENABLE_CUDA="false"
+ARG ENABLE_ROCM="false"
+
 # ROS Noetic is EOL since May 2025, so the keyring used by the official ROS APT repository has expired.
 # Therefore, we need to manually update the keyring to avoid EXPKEYSIG errors when running `apt-get update`.
 
@@ -44,15 +49,18 @@ RUN apt-get update && \
 # Now we can safely run apt-get update again.
 
 
-# Install OpenGL libraries and runtime components (not drivers - those are on host)
+# Install base OpenGL libraries and runtime components (Mesa - works for Intel/AMD)
 RUN apt-get update && \
     apt-get -y install --no-install-recommends \
-        # OpenGL runtime libraries (Mesa userspace)
+        # Base OpenGL runtime libraries (Mesa userspace)
         mesa-utils \
         libgl1-mesa-glx \
         libgl1-mesa-dri \
         libglx-mesa0 \
         libglu1-mesa \
+        # Vulkan support for modern AMD/Intel GPUs
+        mesa-vulkan-drivers \
+        vulkan-utils \
         # X11 libraries for GUI support
         libxrandr2 \
         libxss1 \
@@ -67,6 +75,9 @@ RUN apt-get update && \
         # X11 utilities
         x11-utils \
         xauth \
+        # Hardware detection utilities
+        pciutils \
+        lshw \
         # GUI applications
         nautilus \
         # basic tools
@@ -84,6 +95,47 @@ RUN apt-get update && \
         pkg-config && \
     ln -s /usr/bin/python3 /usr/bin/python && \
     rm -rf /var/lib/apt/lists/*
+
+# Conditionally install NVIDIA CUDA support
+RUN if [ "$GPU_SUPPORT" = "nvidia" ] || [ "$GPU_SUPPORT" = "all" ] || [ "$ENABLE_CUDA" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            # Add NVIDIA package repository
+            software-properties-common && \
+        # Install CUDA keyring
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb && \
+        dpkg -i cuda-keyring_1.0-1_all.deb && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            # CUDA runtime libraries
+            cuda-runtime-12-3 \
+            libcudnn8 \
+            # NVIDIA OpenGL libraries
+            libnvidia-gl-470 \
+            # NVIDIA development tools
+            nvidia-cuda-toolkit && \
+        rm -f cuda-keyring_1.0-1_all.deb && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# Conditionally install AMD ROCm support (for dedicated AMD GPUs only)
+RUN if [ "$GPU_SUPPORT" = "amd" ] || [ "$GPU_SUPPORT" = "all" ] || [ "$ENABLE_ROCM" = "true" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            # Add ROCm repository
+            wget \
+            gnupg2 && \
+        # Add ROCm GPG key and repository
+        wget -qO - https://repo.radeon.com/rocm/rocm.gpg.key | apt-key add - && \
+        echo 'deb [arch=amd64] https://repo.radeon.com/rocm/apt/5.6/ ubuntu main' > /etc/apt/sources.list.d/rocm.list && \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            # ROCm runtime for dedicated AMD GPUs
+            rocm-runtime \
+            rocm-cmake \
+            hip-runtime-amd && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Install MuJoCo dependencies
 RUN apt-get update && \
@@ -105,12 +157,16 @@ RUN pip install --no-cache-dir \
     PyOpenGL_accelerate \
     numpy
 
-# Set environment variables for hardware rendering
+# Set environment variables for hardware rendering (will be adjusted by entrypoint)
 ENV DISPLAY=:0
 ENV LIBGL_ALWAYS_INDIRECT=0
 ENV LIBGL_ALWAYS_SOFTWARE=0
 ENV MESA_GL_VERSION_OVERRIDE=3.3
 ENV MESA_GLSL_VERSION_OVERRIDE=330
+# Store GPU support configuration for runtime detection
+ENV GPU_SUPPORT_BUILD=${GPU_SUPPORT}
+ENV CUDA_ENABLED=${ENABLE_CUDA}
+ENV ROCM_ENABLED=${ENABLE_ROCM}
 
 # Copy and set up entrypoint script
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh

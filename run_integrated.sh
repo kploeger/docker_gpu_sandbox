@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# Simple script to start an interactive session with Intel Iris GPU support
+# Script to run container with integrated graphics support (Intel/AMD APU)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE_NAME="ubuntu-intel-iris-gl"
+IMAGE_NAME="gpu-sandbox:integrated"
 
-# Build image if it doesn't exist
-if ! docker images | grep -q "$IMAGE_NAME"; then
-    echo "Building Docker image $IMAGE_NAME..."
-    if ! docker build -t "$IMAGE_NAME" "$SCRIPT_DIR"; then
+# Build integrated graphics image if it doesn't exist  
+if ! docker images | grep -q "gpu-sandbox.*integrated"; then
+    echo "Building integrated graphics Docker image..."
+    if ! docker build -t "$IMAGE_NAME" --build-arg GPU_SUPPORT=integrated "$SCRIPT_DIR"; then
         echo "❌ Failed to build Docker image"
         exit 1
     fi
@@ -16,14 +16,14 @@ if ! docker images | grep -q "$IMAGE_NAME"; then
     echo ""
 fi
 
-echo "🚀 Starting interactive session with Intel Iris GPU support..."
+echo "🚀 Starting interactive session with integrated graphics support..."
 echo "Container: $IMAGE_NAME"
-echo "GPU: Intel Iris with Mesa OpenGL"
+echo "GPU: Intel integrated / AMD APU with Mesa OpenGL"
 echo ""
 
-# Start interactive container
+# Start interactive container with integrated graphics support
 docker run -it --rm \
-    --name iris \
+    --name integrated-gpu \
     --device=/dev/dri:/dev/dri \
     --group-add video \
     -e DISPLAY=$DISPLAY \
