@@ -75,8 +75,10 @@ docker run -it --rm \
     -e LIBGL_ALWAYS_INDIRECT=0 \
     -e LIBGL_ALWAYS_SOFTWARE=0 \
     -v /tmp/.X11-unix:/tmp/.X11-unix:rw \
+    -v $HOME/.Xauthority:/root/.Xauthority:ro \
     -v /dev/shm:/dev/shm \
     --security-opt seccomp=unconfined \
     --cap-add=SYS_PTRACE \
+    --net=host \
     $NVIDIA_ARGS \
     "$IMAGE_NAME" "$@"
