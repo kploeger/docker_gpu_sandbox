@@ -2,6 +2,8 @@
 
 Simplified Docker environment for hardware OpenGL acceleration across all GPU types.
 
+Tested for Intel/AMD integrated graphics, NVIDIA dedicated GPUs. Not tested for AMD. Not tested for Windows/Mac hosts.
+
 ## Host Setup
 
 ### Intel/AMD Integrated Graphics
@@ -33,7 +35,10 @@ docker info | grep nvidia
 # Expected output: "Runtimes: runc io.containerd.runc.v2 nvidia"
 ```
 
-### NVIDIA GPUs (Per-User Rootfull Docker Daemons)
+### NVIDIA GPUs (Per-User Rootfull Docker Daemons as in IAS WAM cell)
+Designed to work with
+[this setup](https://github.com/kploeger/rootfull_per_user_docker_daemons).
+
 ```bash
 # Install NVIDIA Container Toolkit
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
@@ -99,101 +104,4 @@ ls /dev/kfd   # For compute workloads (optional)
 
 # 4. Run MuJoCo viewer with included ant model
 ./run.sh python3 -m mujoco.viewer --mjcf /home/models/ant.xml
-```
-
-## Legacy Scripts (Backward Compatibility)
-
-All legacy scripts redirect to the new unified scripts:
-- `./run_gl.sh` → `./run.sh`
-- `./run_auto.sh` → `./run.sh`
-- `./run_nvidia.sh` → `./run.sh`
-- `./run_amd.sh` → `./run.sh`
-- `./run_integrated.sh` → `./run.sh`
-
-## Features
-
-- **Universal GPU Support** - Intel, AMD, and NVIDIA GPUs with automatic detection
-- **Hardware OpenGL** - Mesa drivers for Intel/AMD, NVIDIA Container Runtime for NVIDIA
-- **ROS Noetic + MuJoCo** - Ready for robotics simulation with hardware acceleration
-- **Smart Building** - Fast builds by default, AMD drivers only when needed
-
-## Troubleshooting
-
-```bash
-# Check GPU detection
-lspci | grep -E "(VGA|3D|Display)"
-
-# Check DRI devices
-ls -la /dev/dri/
-
-# Test OpenGL in container
-./run.sh glxinfo | grep "Direct rendering"
-
-# NVIDIA specific
-nvidia-smi
-docker info | grep nvidia
-
-# Per-user Docker daemon troubleshooting
-docker context ls                    # Check active context
-echo $DOCKER_HOST                   # Should show your user daemon socket
-ps aux | grep dockerd               # Check running Docker daemons
-```
-
-### Common Issues with Per-User Docker Daemons
-
-**NVIDIA runtime not found:**
-- Ensure `~/.config/docker/daemon.json` has the nvidia runtime configured
-- Restart Docker daemon: `sudo stop-docker && sudo start-docker`
-- Verify with: `docker info | grep -i runtime`
-
-**Permission issues:**
-- Make sure your user can access `/dev/nvidia*` devices: `ls -la /dev/nvidia*`
-- Check Docker daemon is running as your user: `ps aux | grep dockerd`
-
-**X11 forwarding issues:**
-- Run `xhost +local:` before starting containers
-- Verify `$DISPLAY` is set: `echo $DISPLAY`
-
-**Docker daemon management:**
-- Stop daemon: `sudo stop-docker`
-- Start daemon: `sudo start-docker`
-- Check status: `docker info` or `ps aux | grep dockerd`
-
-## Prerequisites
-
-**All Systems:** X11 forwarding enabled (`xhost +local:` or proper X auth)
-
-**Intel/AMD GPUs:** Mesa drivers installed, `/dev/dri/*` access  
-**NVIDIA GPUs:** NVIDIA drivers + [nvidia-container-toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-
-## Testing
-
-```bash
-# Inside container, test OpenGL
-glxinfo | grep "OpenGL renderer"
-glxinfo | grep "Direct rendering"
-
-# Run MuJoCo simulation
-cd /home/models
-python3 -c "
-import mujoco
-import mujoco.viewer
-model = mujoco.MjModel.from_xml_path('ant.xml')
-data = mujoco.MjData(model)
-mujoco.viewer.launch(model, data)
-"
-```
-
-## Troubleshooting
-
-```bash
-# Check GPU detection
-lspci | grep -E "(VGA|3D|Display)"
-
-# Check DRI devices
-ls -la /dev/dri/
-
-# NVIDIA specific
-nvidia-smi
-docker info | grep nvidia
 ```
